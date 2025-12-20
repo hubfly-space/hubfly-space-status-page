@@ -7,6 +7,10 @@ declare namespace Cloudflare {
 		WORKER_SELF_REFERENCE: Fetcher /* hubfly-space-status-page */;
 		IMAGES: ImagesBinding;
 		ASSETS: Fetcher;
+		DB: D1Database;
+		CRON_SECRET: string;
+		UPSTREAM_STATUS_API_URL: string;
+		DISCORD_WEBHOOK_URL: string;
 	}
 }
 interface CloudflareEnv extends Cloudflare.Env {}
