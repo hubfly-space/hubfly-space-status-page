@@ -14,36 +14,32 @@ interface LatencyChartProps {
 }
 
 export default function LatencyChart({ data, color = "#10b981" }: LatencyChartProps) {
-    // Format data for Recharts
     const chartData = data.map((d) => ({
         time: d.timestamp,
         latency: d.latency,
         status: d.status,
     }));
 
+    // Use a more muted/functional color if it's the default emerald
+    const strokeColor = color === "#10b981" ? "#52525b" : color; // Zinc-600 for normal, else limit alerts
+
     return (
-        <div className="h-full w-full select-none">
+        <div className="h-full w-full select-none cursor-crosshair">
             <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData}>
-                    <defs>
-                        <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                            <stop offset="95%" stopColor={color} stopOpacity={0} />
-                        </linearGradient>
-                    </defs>
                     <YAxis hide domain={['dataMin', 'dataMax']} />
                     <Tooltip
+                        cursor={{ stroke: '#27272a', strokeWidth: 1 }}
                         content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                                 const item = payload[0].payload;
                                 return (
-                                    <div className="bg-slate-900/90 border border-slate-700/50 backdrop-blur-md px-3 py-2 rounded-lg shadow-xl text-xs">
-                                        <p className="text-slate-200 font-medium">
-                                            {item.latency}ms
-                                        </p>
-                                        <p className="text-slate-500">
-                                            {new Date(item.time).toLocaleTimeString()}
-                                        </p>
+                                    <div className="bg-zinc-900 border border-zinc-800 px-2 py-1 text-[10px] font-mono shadow-sm">
+                                        <span className="text-zinc-300">{item.latency}ms</span>
+                                        <span className="text-zinc-500 mx-1">|</span>
+                                        <span className="text-zinc-500">
+                                            {new Date(item.time).toLocaleTimeString([], { hour12: false })}
+                                        </span>
                                     </div>
                                 );
                             }
@@ -51,12 +47,13 @@ export default function LatencyChart({ data, color = "#10b981" }: LatencyChartPr
                         }}
                     />
                     <Area
-                        type="monotone"
+                        type="step"
                         dataKey="latency"
                         stroke={color}
-                        strokeWidth={2}
-                        fill={`url(#gradient-${color})`}
-                        isAnimationActive={true}
+                        strokeWidth={1.5}
+                        fill={color}
+                        fillOpacity={0.1}
+                        isAnimationActive={false}
                     />
                 </AreaChart>
             </ResponsiveContainer>
