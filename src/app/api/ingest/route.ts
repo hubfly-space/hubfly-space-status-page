@@ -3,8 +3,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { StatusResponse, Status } from "@/lib/types";
 import { sendDiscordNotification } from "@/lib/discord";
 
-export const runtime = "edge";
-
 // Helper to handle check logic: Notify if changed, then Insert
 async function handleServiceCheck(
   db: D1Database,
