@@ -34,10 +34,10 @@ export default function LatencyChart({ data, color = "#10b981" }: LatencyChartPr
                             if (active && payload && payload.length) {
                                 const item = payload[0].payload;
                                 return (
-                                    <div className="bg-zinc-900 border border-zinc-800 px-2 py-1 text-[10px] font-mono shadow-sm">
-                                        <span className="text-zinc-300">{item.latency}ms</span>
-                                        <span className="text-zinc-500 mx-1">|</span>
-                                        <span className="text-zinc-500">
+                                    <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-[10px] font-mono shadow-sm rounded-sm">
+                                        <span className="text-zinc-600 dark:text-zinc-300">{item.latency}ms</span>
+                                        <span className="text-zinc-400 dark:text-zinc-500 mx-1">|</span>
+                                        <span className="text-zinc-500 dark:text-zinc-500">
                                             {new Date(item.time).toLocaleTimeString([], { hour12: false })}
                                         </span>
                                     </div>
