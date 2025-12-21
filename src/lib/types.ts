@@ -8,6 +8,7 @@ export interface Service {
   latency: number;
   lastChecked: string;
   error: string | null;
+  history: { status: Status; latency: number; timestamp: number }[];
 }
 
 export interface Region {

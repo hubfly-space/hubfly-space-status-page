@@ -31,6 +31,30 @@ export async function getSystemStatus() {
     ORDER BY region_name, service_name
   `).all<DBCheckRow>();
 
+  // Get History (Last 45 checks per service)
+  // Optimization: Fetch all recent checks and map them in JS to avoid N+1 queries
+  // Since D1 doesn't support sophisticated window functions easily in one go with the current schema for all services efficiently without a huge query,
+  // we will fetch the last 2000 checks globally (should cover all services for the last hour or so if we have ~40 services)
+  // Adjust limit based on service count. 
+  const { results: historyResults } = await db.prepare(`
+    SELECT service_id, status, latency, timestamp 
+    FROM checks 
+    WHERE timestamp > ? 
+    ORDER BY timestamp ASC
+  `).bind(Date.now() - 1000 * 60 * 60 * 2).all<{ service_id: string, status: string, latency: number, timestamp: number }>(); // Last 2 hours
+
+  const historyMap = new Map<string, { status: Status; latency: number; timestamp: number }[]>();
+  for (const h of historyResults) {
+    if (!historyMap.has(h.service_id)) {
+      historyMap.set(h.service_id, []);
+    }
+    historyMap.get(h.service_id)!.push({
+        status: h.status as Status,
+        latency: h.latency,
+        timestamp: h.timestamp
+    });
+  }
+
   // Group by Region
   const regionsMap = new Map<string, Region>();
   let overallStatus: Status = 'operational';
@@ -41,8 +65,8 @@ export async function getSystemStatus() {
       regionsMap.set(row.region_id, {
         id: row.region_id,
         name: row.region_name,
-        status: 'operational', // Will update
-        ip: '', // Not stored in check, maybe irrelevant or needs separate table
+        status: 'operational', 
+        ip: '', 
         services: []
       });
     }
@@ -52,11 +76,13 @@ export async function getSystemStatus() {
     // Determine Service Status
     const serviceStatus = row.status as Status;
     if (serviceStatus === 'down') {
-      overallStatus = 'down'; // If any is down, system is down? Or degraded?
-      // Usually if critical is down -> Down. If some -> Degraded.
-      // For simplicity: Down.
-      region.status = 'degraded'; // Mark region as impacted
+      overallStatus = 'down'; 
+      region.status = 'degraded'; 
     }
+
+    const history = historyMap.get(row.service_id) || [];
+    // Take last 45 for UI
+    const recentHistory = history.slice(-45);
 
     region.services.push({
       id: row.service_id,
@@ -65,7 +91,8 @@ export async function getSystemStatus() {
       statusCode: row.status_code,
       latency: row.latency,
       lastChecked: new Date(row.timestamp).toISOString(),
-      error: row.error
+      error: row.error,
+      history: recentHistory
     });
 
     if (row.timestamp > latestTimestamp) {
