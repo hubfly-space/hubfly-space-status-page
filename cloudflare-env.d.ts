@@ -11,6 +11,8 @@ declare namespace Cloudflare {
 		CRON_SECRET: string;
 		UPSTREAM_STATUS_API_URL: string;
 		DISCORD_WEBHOOK_URL: string;
+		CHECKS_RETENTION_DAYS: string;
+		INCIDENTS_RETENTION_DAYS: string;
 	}
 }
 interface CloudflareEnv extends Cloudflare.Env {}

@@ -3,6 +3,35 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { StatusResponse, Status } from "@/lib/types";
 import { sendDiscordNotification } from "@/lib/discord";
 
+function parseRetentionDays(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+async function cleanupOldData(
+  db: D1Database,
+  now: number,
+  env: { CHECKS_RETENTION_DAYS?: string; INCIDENTS_RETENTION_DAYS?: string }
+) {
+  const checksRetentionDays = parseRetentionDays(env.CHECKS_RETENTION_DAYS, 14);
+  const incidentsRetentionDays = parseRetentionDays(env.INCIDENTS_RETENTION_DAYS, 180);
+
+  const checksCutoff = now - checksRetentionDays * 24 * 60 * 60 * 1000;
+  await db
+    .prepare(`DELETE FROM checks WHERE timestamp < ?`)
+    .bind(checksCutoff)
+    .run();
+
+  const incidentsCutoff = now - incidentsRetentionDays * 24 * 60 * 60 * 1000;
+  await db
+    .prepare(`DELETE FROM incidents WHERE resolved_at IS NOT NULL AND resolved_at < ?`)
+    .bind(incidentsCutoff)
+    .run();
+}
+
 // Helper to handle check logic: Notify if changed, then Insert
 async function handleServiceCheck(
   db: D1Database,
@@ -76,6 +105,49 @@ async function handleServiceCheck(
     }
   }
 
+  const wasDown = lastCheck?.status === 'down';
+  const isDown = service.status === 'down';
+
+  if (isDown) {
+    const openIncident = await db
+      .prepare(
+        `SELECT id, last_error FROM incidents WHERE service_id = ? AND resolved_at IS NULL ORDER BY started_at DESC LIMIT 1`
+      )
+      .bind(service.id)
+      .first<{ id: number; last_error: string | null }>();
+
+    if (!openIncident) {
+      await db
+        .prepare(
+          `INSERT INTO incidents (service_id, service_name, region_id, region_name, started_at, last_error)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          service.id,
+          service.name,
+          region.id,
+          region.name,
+          timestamp,
+          service.error || null
+        )
+        .run();
+    } else if (service.error && service.error !== openIncident.last_error) {
+      await db
+        .prepare(`UPDATE incidents SET last_error = ? WHERE id = ?`)
+        .bind(service.error, openIncident.id)
+        .run();
+    }
+  } else if (wasDown) {
+    await db
+      .prepare(
+        `UPDATE incidents
+         SET resolved_at = ?
+         WHERE service_id = ? AND resolved_at IS NULL`
+      )
+      .bind(timestamp, service.id)
+      .run();
+  }
+
   // Insert new check
   await db
     .prepare(
@@ -122,6 +194,8 @@ export async function GET(request: Request) {
   let upstreamStatus: Status = 'operational';
   let upstreamLatency = 0;
   let upstreamStatusCode = 200;
+
+  await cleanupOldData(db, timestamp, env);
 
   // 1. Check Upstream Availability
   const start = Date.now();

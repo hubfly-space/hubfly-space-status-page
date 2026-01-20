@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { Region, Status } from "./types";
+import { Region, Status, SystemStatus } from "./types";
 
 interface DBCheckRow {
   region_id: string;
@@ -13,7 +13,18 @@ interface DBCheckRow {
   timestamp: number;
 }
 
-export async function getSystemStatus() {
+interface DBIncidentRow {
+  id: number;
+  service_id: string;
+  service_name: string;
+  region_id: string;
+  region_name: string;
+  started_at: number;
+  resolved_at: number | null;
+  last_error: string | null;
+}
+
+export async function getSystemStatus(): Promise<SystemStatus> {
   const { env } = await getCloudflareContext({ async: true });
   const db = env.DB;
 
@@ -54,6 +65,24 @@ export async function getSystemStatus() {
         timestamp: h.timestamp
     });
   }
+
+  const { results: incidentResults } = await db.prepare(`
+    SELECT id, service_id, service_name, region_id, region_name, started_at, resolved_at, last_error
+    FROM incidents
+    ORDER BY resolved_at IS NULL DESC, started_at DESC
+    LIMIT 12
+  `).all<DBIncidentRow>();
+
+  const incidents = incidentResults.map((incident) => ({
+    id: incident.id,
+    serviceId: incident.service_id,
+    serviceName: incident.service_name,
+    regionId: incident.region_id,
+    regionName: incident.region_name,
+    startedAt: new Date(incident.started_at).toISOString(),
+    resolvedAt: incident.resolved_at ? new Date(incident.resolved_at).toISOString() : null,
+    lastError: incident.last_error
+  }));
 
   // Group by Region
   const regionsMap = new Map<string, Region>();
@@ -122,6 +151,7 @@ export async function getSystemStatus() {
   return {
     status: overallStatus,
     timestamp: new Date(latestTimestamp).toISOString(),
-    regions: Array.from(regionsMap.values())
+    regions: Array.from(regionsMap.values()),
+    incidents
   };
 }

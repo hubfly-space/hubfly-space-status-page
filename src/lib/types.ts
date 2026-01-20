@@ -19,8 +19,23 @@ export interface Region {
   services: Service[];
 }
 
+export interface Incident {
+  id: number;
+  serviceId: string;
+  serviceName: string;
+  regionId: string;
+  regionName: string;
+  startedAt: string;
+  resolvedAt: string | null;
+  lastError: string | null;
+}
+
 export interface StatusResponse {
   status: Status;
   timestamp: string;
   regions: Region[];
+}
+
+export interface SystemStatus extends StatusResponse {
+  incidents: Incident[];
 }
